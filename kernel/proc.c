@@ -124,6 +124,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->priority = 50; // Default priority
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -438,23 +439,33 @@ scheduler(void)
     intr_off();
 
     int found = 0;
+    int best_priority = 101; 
+
+    // Find the highest priority value (lowest number) among RUNNABLE processes
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+      if(p->state == RUNNABLE && p->priority < best_priority) {
+        best_priority = p->priority;
       }
       release(&p->lock);
     }
+
+    // Run processes that have the best priority
+    if (best_priority <= 100) {
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE && p->priority == best_priority) {
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
+
+          c->proc = 0;
+          found = 1;
+        }
+        release(&p->lock);
+      }
+    }
+
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
       asm volatile("wfi");
@@ -687,4 +698,36 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// Change process priority.
+int
+setpriority(int pid, int priority)
+{
+  struct proc *p;
+  int found = 0;
+  int old_priority = -1;
+
+  for(p = proc; p < &proc[NPROC]; p++){
+    acquire(&p->lock);
+    if(p->pid == pid){
+      old_priority = p->priority;
+      p->priority = priority;
+      found = 1;
+      release(&p->lock);
+      break;
+    }
+    release(&p->lock);
+  }
+  
+  if(found) {
+    // If the new priority is higher (lower numerical value) than before, 
+    // it implies we might want to schedule it immediately. yield() gives up CPU.
+    if (priority < old_priority) {
+       yield();
+    }
+    return 0;
+  }
+  
+  return -1;
 }
