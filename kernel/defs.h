@@ -40,6 +40,7 @@ int             dirlink(struct inode*, char*, uint);
 struct inode*   dirlookup(struct inode*, char*, uint*);
 struct inode*   ialloc(uint, short);
 struct inode*   idup(struct inode*);
+struct inode*   iget(uint, uint);
 void            iinit();
 void            ilock(struct inode*);
 void            iput(struct inode*);
@@ -54,6 +55,7 @@ void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
 void            ireclaim(int);
+struct inode*   iroot(void);
 
 // kalloc.c
 void*           kalloc(void);
